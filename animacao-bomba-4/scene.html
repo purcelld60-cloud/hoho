@@ -1,0 +1,197 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head><body>
+<canvas id="out" width="720" height="1280"></canvas>
+<script src="three.min.js"></script>
+<script>
+"use strict";
+/* Vídeo 4 — porão alagando com chuva: bomba elevatória (submersa) com boia; esgoto / mais vazão com bomba maior.
+   Sem textos: só alterna entre o vídeo dele e a situação em 3D. */
+const W=720,H=1280;
+const out=document.getElementById("out"),ctx=out.getContext("2d");
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const sm=x=>{x=clamp(x);return x*x*(3-2*x);};
+const ramp=(t,a,b)=>sm((t-a)/(b-a));
+const win=(t,a,b,f=.2)=>Math.min(ramp(t,a,a+f),1-ramp(t,b-f,b));
+const lerp=(a,b,k)=>a+(b-a)*k;
+
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(1);renderer.setSize(W,H);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();const SKY=new THREE.Color("#9fb3c4");scene.background=SKY;scene.fog=new THREE.Fog(SKY,30,80);
+const camera=new THREE.PerspectiveCamera(48,W/H,.05,200);
+const hemi=new THREE.HemisphereLight(0xffffff,0x7a6a52,.8);scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xfff4e2,.7);sun.position.set(-6,16,14);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-14,right:24,top:12,bottom:-8,far:60});scene.add(sun);
+const lamp=new THREE.PointLight(0xffe2a8,.9,9,2);lamp.position.set(-4,-.6,.5);scene.add(lamp);
+const lamp2=new THREE.PointLight(0xffe2a8,.9,9,2);lamp2.position.set(15.2,-.4,1);scene.add(lamp2);
+const M=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.8},o));
+function mesh(g,m,x=0,y=0,z=0,par=scene){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;par.add(o);return o;}
+function box(x0,x1,y0,y1,z0,z1,m){return mesh(new THREE.BoxGeometry(x1-x0,y1-y0,z1-z0),m,(x0+x1)/2,(y0+y1)/2,(z0+z1)/2);}
+
+/* ---------- ground with two cut-away cavities: basement (A) and sewage pit (B) ---------- */
+const soil=M("#8a6a4a"),conc=M("#a8a29e"),concD=M("#8f8a85");
+const Z0=-2.6,Z1=1.5;
+box(-24,-7.2,-7,0,Z0,Z1,soil);box(-.3,12.6,-7,0,Z0,Z1,soil);box(17.8,30,-7,0,Z0,Z1,soil);
+box(-7.2,-2.9,-7,-3.4,Z0,Z1,soil);box(-1.5,-.3,-7,-3.4,Z0,Z1,soil);box(-2.9,-1.5,-7,-4.3,Z0,Z1,soil);
+box(12.6,17.8,-7,-3.8,Z0,Z1,soil);
+// concrete lining
+box(-7.2,-2.9,-3.4,-3.2,Z0,Z1,conc);box(-1.5,-.3,-3.4,-3.2,Z0,Z1,conc);box(-2.9,-1.5,-3.4,-3.2,Z0,-.8,conc); // basement floor with the sump-pit opening
+box(-7.2,-.3,-3.2,0,Z0,Z0+.2,concD);                     // basement back wall
+box(-7.2,-7.0,-3.2,0,Z0,Z1,conc);box(-.5,-.3,-3.2,0,Z0,Z1,conc);
+box(-7.2,-.3,-.25,0,Z0,Z1,conc);                          // basement ceiling / house floor slab
+box(-2.9,-1.5,-4.3,-4.2,-.7,.7,concD);box(-2.9,-2.8,-4.3,-3.2,-.7,.7,conc);box(-1.6,-1.5,-4.3,-3.2,-.7,.7,conc);box(-2.9,-1.5,-4.3,-3.2,-.8,-.7,concD); // sump pit
+box(12.6,17.8,-3.8,-3.6,Z0,Z1,conc);box(12.6,12.8,-3.6,0,Z0,Z1,conc);box(17.6,17.8,-3.6,0,Z0,Z1,conc);box(12.6,17.8,-3.6,0,Z0,Z0+.2,concD);
+// street / sidewalk / grass surfaces
+box(-24,-7.2,0,.08,Z0,Z1,M("#6fae54"));box(-.3,3.2,0,.12,Z0,Z1,M("#b9bcc2"));box(3.2,12.6,0,.06,Z0,Z1,M("#5b6068"));box(17.8,30,0,.08,Z0,Z1,M("#6fae54"));
+const gutter=box(2.9,3.2,-.05,.06,Z0,Z1,M("#3f4349"));
+// stairs into the basement
+for(let i=0;i<7;i++)box(-6.9+i*.42,-6.5+i*.42,-3.2,-3.2+(i+1)*.42,-2.3,-1.3,conc);
+
+/* ---------- house above the basement ---------- */
+const wall=M("#f2e6d0");
+box(-7.2,-.3,0,3.4,-2.4,-2.2,wall);box(-7.2,-7.0,0,3.4,-2.4,1.3,wall);box(-.5,-.3,0,3.4,-2.4,1.3,wall);
+box(-7.2,-.3,0,.9,1.1,1.3,wall);box(-7.2,-.3,2.6,3.4,1.1,1.3,wall);box(-7.2,-5.6,.9,2.6,1.1,1.3,wall);box(-4.4,-3.0,.9,2.6,1.1,1.3,wall);box(-1.8,-.3,.9,2.6,1.1,1.3,wall);
+box(-5.6,-4.4,.9,2.6,1.15,1.25,M("#a8d4f0",{roughness:.1}));box(-3.0,-1.8,.9,2.6,1.15,1.25,M("#a8d4f0",{roughness:.1}));
+const roof=mesh(new THREE.CylinderGeometry(.01,4.6,1.8,4,1),M("#b5473a"),-3.75,4.3,-.55);roof.rotation.y=Math.PI/4;roof.scale.set(1.05,1,.6);
+
+/* ---------- sewage area (B): a small building, inflow pipe ---------- */
+box(19,24,0,3,-2.4,-.6,M("#e9d8bf"));mesh(new THREE.CylinderGeometry(.01,3.8,1.4,4,1),M("#8a3b2e"),21.5,3.7,-1.5).rotation.y=Math.PI/4;
+const inflow=mesh(new THREE.CylinderGeometry(.18,.18,3,12),M("#9ca3af"),14.1,-1.1,-.6);inflow.rotation.z=Math.PI/2;inflow.position.x=11.3+1.5;
+// manhole at street level
+mesh(new THREE.CylinderGeometry(.6,.6,.06,24),M("#2b2f36"),20.6,.1,.6);
+
+/* ---------- water bodies ---------- */
+const waterM=M("#3a8fd6",{transparent:true,opacity:.72,roughness:.15,emissive:"#0b3d6b"});
+const sewM=M("#6b5a3a",{transparent:true,opacity:.9,roughness:.3,emissive:"#1f170c"});
+const baseWater=mesh(new THREE.BoxGeometry(6.5,1,4.0),waterM,-3.75,0,-.55);baseWater.castShadow=false;
+const pitWater=mesh(new THREE.BoxGeometry(1.2,1,1.4),waterM,-2.2,0,0);pitWater.castShadow=false;
+const sewWater=mesh(new THREE.BoxGeometry(4.8,1,3.9),sewM,15.2,0,-.55);sewWater.castShadow=false;
+
+/* ---------- pumps ---------- */
+// small submersible pump (inox body, black top, orange base) + float switch
+const pumpA=new THREE.Group();pumpA.position.set(-2.2,-4.2,0);scene.add(pumpA);
+const pA=new THREE.Group();pumpA.add(pA);
+mesh(new THREE.CylinderGeometry(.24,.26,.12,20),M("#f97316",{roughness:.5}),0,.06,0,pA);
+mesh(new THREE.CylinderGeometry(.21,.21,.42,20),M("#d6dadf",{metalness:.8,roughness:.25}),0,.33,0,pA);
+mesh(new THREE.CylinderGeometry(.22,.22,.1,20),M("#1f2933"),0,.58,0,pA);
+mesh(new THREE.TorusGeometry(.13,.025,6,14,Math.PI),M("#1f2933"),0,.66,0,pA);
+mesh(new THREE.CylinderGeometry(.06,.06,.25,10),M("#1f2933"),.1,.7,0,pA);
+const floatA=new THREE.Group();floatA.position.set(-2.2+.18,-4.2+.6,0);scene.add(floatA);
+const fA=mesh(new THREE.BoxGeometry(.24,.1,.16),M("#f97316",{roughness:.4}),.3,0,0,floatA);
+const cableA=mesh(new THREE.CylinderGeometry(.012,.012,.3,6),M("#111"),.15,0,0,floatA);cableA.rotation.z=Math.PI/2;
+// big sewage pump (blue)
+const pumpB=new THREE.Group();pumpB.position.set(15.2,-3.6,0);scene.add(pumpB);
+const pB=new THREE.Group();pumpB.add(pB);
+mesh(new THREE.CylinderGeometry(.55,.62,.35,24),M("#1d4ed8",{roughness:.45}),0,.18,0,pB);
+mesh(new THREE.CylinderGeometry(.42,.42,1.0,24),M("#2563eb",{roughness:.45}),0,.85,0,pB);
+mesh(new THREE.CylinderGeometry(.44,.44,.18,24),M("#111827"),0,1.43,0,pB);
+mesh(new THREE.TorusGeometry(.25,.04,6,16,Math.PI),M("#111827"),0,1.55,0,pB);
+const floatB=new THREE.Group();floatB.position.set(15.2+.45,-3.6+1.2,0);scene.add(floatB);
+mesh(new THREE.BoxGeometry(.34,.14,.22),M("#f97316",{roughness:.4}),.45,0,0,floatB);
+
+/* ---------- pipes + flow particles ---------- */
+const P=(x,y,z=.0)=>new THREE.Vector3(x,y,z);
+const pipeM=M("#9fb8c8",{transparent:true,opacity:.38,roughness:.15,depthWrite:false});
+function makePath(pts,r){const cp=new THREE.CurvePath();for(let i=0;i<pts.length-1;i++){cp.add(new THREE.LineCurve3(pts[i],pts[i+1]));
+  const a=pts[i],b=pts[i+1],c=mesh(new THREE.CylinderGeometry(r,r,a.distanceTo(b),14,1,true),pipeM);c.castShadow=false;c.position.copy(a).add(b).multiplyScalar(.5);
+  c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());if(i>0)mesh(new THREE.SphereGeometry(r*1.15,12,8),M("#8ea4b3"),a.x,a.y,a.z);}return cp;}
+const pathA=makePath([P(-2.1,-3.45),P(-2.1,-.6),P(-.9,-.6),P(-.9,.55),P(2.0,.55)],.09);
+const pathB=makePath([P(15.2,-2.1),P(15.2,.7),P(20.6,.7),P(20.6,.2)],.2);
+function particles(n,size,mat){const m=new THREE.InstancedMesh(new THREE.SphereGeometry(size,8,6),mat,n);m.castShadow=false;scene.add(m);return m;}
+const flowM=M("#2b8be6",{emissive:"#0b4f8f",roughness:.2}),sewFlowM=M("#7a6440",{emissive:"#2a1d0c",roughness:.3});
+const fa=particles(70,.075,flowM),fb=particles(90,.17,sewFlowM),jetA=particles(60,.06,flowM),jetB=particles(30,.1,sewFlowM),inB=particles(40,.1,sewFlowM),seep=particles(40,.05,flowM);
+const dummy=new THREE.Object3D();
+function setP(inst,i,p,s){dummy.position.copy(p);dummy.scale.setScalar(s);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);}
+// rain
+const RN=1600,rainGeo=new THREE.BufferGeometry(),rainPos=new Float32Array(RN*3);
+let seed=3;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+for(let i=0;i<RN;i++){rainPos[i*3]=-14+rnd()*20;rainPos[i*3+1]=rnd()*14;rainPos[i*3+2]=-3+rnd()*8;}
+const rainBase=rainPos.slice();rainGeo.setAttribute("position",new THREE.BufferAttribute(rainPos,3));
+const rainMat=new THREE.PointsMaterial({color:"#cfe3ff",size:.08,transparent:true,opacity:0});scene.add(new THREE.Points(rainGeo,rainMat));
+
+/* ---------- people ---------- */
+function person({skin,shirt,pants,hair,s=1}){const root=new THREE.Group(),body=new THREE.Group();root.add(body);
+  const Sk=M(skin),Sh=M(shirt),Pa=M(pants),Ha=M(hair);
+  const leg=x=>{const g=new THREE.Group();g.position.set(x,.9,0);mesh(new THREE.BoxGeometry(.26,.9,.28),Pa,0,-.45,0,g);mesh(new THREE.BoxGeometry(.28,.12,.38),M("#333"),0,-.86,.05,g);body.add(g);return g;};
+  leg(-.16);leg(.16);mesh(new THREE.BoxGeometry(.72,.9,.42),Sh,0,1.35,0,body);
+  const head=new THREE.Group();head.position.y=1.82;body.add(head);mesh(new THREE.SphereGeometry(.32,16,12),Sk,0,.28,0,head);
+  mesh(new THREE.SphereGeometry(.335,16,10,0,Math.PI*2,0,Math.PI/2.2),Ha,0,.32,-.02,head);
+  const eM=M("#111");mesh(new THREE.SphereGeometry(.045,8,6),eM,-.11,.33,.29,head);mesh(new THREE.SphereGeometry(.045,8,6),eM,.11,.33,.29,head);
+  const mouth=mesh(new THREE.TorusGeometry(.085,.02,6,12,Math.PI),M("#7a2a2a"),0,.18,.3,head);
+  const arm=x=>{const g=new THREE.Group();g.position.set(x,1.72,0);mesh(new THREE.BoxGeometry(.2,.75,.22),Sh,0,-.36,0,g);mesh(new THREE.SphereGeometry(.11,8,6),Sk,0,-.78,0,g);body.add(g);return g;};
+  const armL=arm(-.47),armR=arm(.47);root.scale.setScalar(s);scene.add(root);return {root,head,mouth,armL,armR};}
+function pose(p,{la=[0,0],ra=[0,0],ht=0,hy=0,smile=true}){p.armL.rotation.set(la[0],0,la[1]);p.armR.rotation.set(ra[0],0,ra[1]);p.head.rotation.set(ht,hy,0);p.mouth.rotation.z=smile?Math.PI:0;p.mouth.position.y=smile?.2:.14;}
+const dono=person({skin:"#c68642",shirt:"#2a9d8f",pants:"#2b2d42",hair:"#1f1a17",s:.8});dono.root.position.set(-4.6,-3.2,-.3);dono.root.rotation.y=.25;
+// boxes stored in the basement (get wet)
+box(-6.6,-5.7,-3.2,-2.5,-2.2,-1.4,M("#c49a6c"));box(-6.5,-5.9,-2.5,-2.0,-2.1,-1.5,M("#b88a5a"));box(-1.3,-.6,-3.2,-2.7,-2.2,-1.6,M("#c49a6c"));
+
+/* ---------- timeline ---------- */
+// cuts: [start,end] where the 3D situation is shown instead of the video
+const CUTS=[[2.0,4.45],[5.5,7.7],[14.5,22.4],[29.5,53.45]];
+const cutAmt=t=>CUTS.reduce((m,[a,b])=>Math.max(m,win(t,a,b,.18)),0);
+// water level in the basement / pit (absolute y)
+function levelA(t){let h=-3.9;h=lerp(h,-2.85,ramp(t,2.1,4.4));h=lerp(h,-3.95,ramp(t,14.8,21.6));
+  if(t>=46)h=lerp(-3.95,-3.35,ramp(t,47.6,49.5));if(t>=50)h=lerp(-3.35,-3.97,ramp(t,50.2,52.5));return h;}
+const pumpAOn=t=>(t>14.6&&t<21.8)||(t>49.7&&t<52.7)?1:0;
+const pumpBOn=t=>(t>29.6&&t<53.5)?1:0;
+const bStrong=t=>.5+.5*ramp(t,34,35.2);   // "mais vazão"
+const raining=t=>win(t,1.8,8,.4)+win(t,14.3,22.5,.4);
+// integrated phases
+const DT=1/120;const phA=[0],phB=[0],vibA=[0];
+for(let i=1;i<=70/DT;i++){const t=i*DT;phA.push(phA[i-1]+pumpAOn(t)*3.2*DT);phB.push(phB[i-1]+pumpBOn(t)*(2.5+3.5*bStrong(t)+2.5*ramp(t,41.3,42.2))*DT);}
+const lk=(a,t)=>a[Math.min(a.length-1,Math.round(t/DT))];
+// camera shots
+const SHOTS=[
+ [1.9,[-3.6,2.6,15],[-3.6,.6,0]],[3.0,[-3.6,-.6,10],[-3.6,-2.0,0]],[4.4,[-3.4,-1.4,8.2],[-3.4,-2.6,0]],
+ [5.4,[-2.2,-2.2,4.4],[-2.2,-3.6,.2]],[7.7,[-2.0,-2.3,4.0],[-2.2,-3.7,.2]],
+ [14.4,[-2.3,-2.6,3.6],[-2.2,-3.7,.2]],[16.3,[-2.0,-2.2,4.2],[-2.1,-3.2,.2]],[18.2,[-1.2,-1.0,8.5],[-1.0,-1.6,0]],[20.6,[-.6,-1.0,12],[-.3,-1.2,0]],[22.4,[-.4,-.9,12.5],[-.2,-1.2,0]],
+ [29.4,[15.2,1.0,13],[15.4,-1.0,0]],[33.8,[15.2,.6,12],[15.4,-1.2,0]],[35.2,[15.2,-1.8,6.4],[15.2,-2.6,.3]],[38.9,[15.4,-1.6,6.8],[15.2,-2.4,.3]],
+ [39.3,[15.6,-1.6,7.0],[15.4,-2.4,.3]],[41.2,[16.8,-.2,10.5],[17.2,-.8,0]],[44.9,[17.4,.2,10],[17.6,-.6,0]],
+ [45.4,[-2.2,-2.5,3.6],[-2.2,-3.7,.2]],[53.5,[-2.0,-2.5,3.4],[-2.2,-3.7,.2]]];
+function camAt(t){let i=0;while(i<SHOTS.length-2&&t>SHOTS[i+1][0])i++;const a=SHOTS[i],b=SHOTS[i+1];
+  // hard cut between distant shots (scene changes), smooth move within a scene
+  const far=Math.hypot(a[1][0]-b[1][0],a[1][1]-b[1][1],a[1][2]-b[1][2])>8;const k=far?(t>=b[0]-.001?1:0):sm((t-a[0])/(b[0]-a[0]));
+  const lp=(u,v)=>u.map((x,j)=>x+(v[j]-x)*k);return [lp(a[1],b[1]),lp(a[2],b[2])];}
+
+function draw3D(t){
+  const [cp,ct]=camAt(t);camera.position.set(...cp);camera.lookAt(...ct);
+  // weather / light
+  const rain=clamp(raining(t));rainMat.opacity=.75*rain;
+  for(let i=0;i<RN;i++){let y=rainBase[i*3+1]-((t*14+i*.37)%14);if(y<0)y+=14;rainPos[i*3+1]=y;}rainGeo.attributes.position.needsUpdate=true;
+  scene.background.set(rain>.2?"#8796a6":"#bcd3e6");scene.fog.color.copy(scene.background);sun.intensity=rain>.2?.45:.8;
+  // basement water
+  const h=levelA(t);
+  const bh=Math.max(.001,h+3.2);baseWater.visible=h>-3.2;baseWater.scale.y=bh;baseWater.position.y=-3.2+bh/2;
+  const ph=Math.max(.001,Math.min(h,-3.2)+4.2);pitWater.scale.y=ph;pitWater.position.y=-4.2+ph/2;
+  // float switch follows the level; pump vibrates when on
+  const fy=clamp(h,-3.98,-3.3)+(1-ramp(t,5.7,7.0))*1.6;floatA.position.y=fy;floatA.rotation.z=clamp((fy+3.75)*2.2,-.6,.7);
+  const drop=ramp(t,5.7,7.0);pumpA.position.y=-4.2+(1-drop)*1.6;pumpA.visible=t>5.6;floatA.visible=t>5.6;
+  const on=pumpAOn(t);pA.position.set(Math.sin(t*90)*.01*on,0,Math.cos(t*80)*.008*on);
+  // pipe flow A + outlet jet into the gutter
+  const LA=pathA.getLength(),pha=lk(phA,t),flowingA=on||(t>21.8&&t<22.4)||(t>52.7&&t<53.2);
+  for(let i=0;i<70;i++){const s=((i/70)*LA+pha)%LA;setP(fa,i,pathA.getPointAt(s/LA),flowingA?1:0);}fa.instanceMatrix.needsUpdate=true;
+  for(let i=0;i<60;i++){const u=((t*1.6+i/60)%1);const p=P(2.0+u*.9,.55-u*u*.55,0+Math.sin(i)*.06);setP(jetA,i,p,on?1:0);}jetA.instanceMatrix.needsUpdate=true;
+  // seepage through the wall while it rains (basement filling)
+  const seeping=win(t,2.0,8,.3);for(let i=0;i<40;i++){const u=((t*.9+i/40)%1);setP(seep,i,P(-6.95+ (i%5)*.02,-.4-u*(2.8),-1.9+(i%8)*.45),seeping>.05&&h>-3.6?1:0);}seep.instanceMatrix.needsUpdate=true;
+  // sewage pit B
+  const bOn=pumpBOn(t),sewH=-1.9-.6*ramp(t,30.5,34.5)+.25*Math.sin(t*1.3)*bOn;
+  const sh=sewH+3.6;sewWater.scale.y=sh;sewWater.position.y=-3.6+sh/2;
+  floatB.position.y=sewH;floatB.rotation.z=.35;
+  pB.position.set(Math.sin(t*70)*.015*bOn,0,Math.cos(t*65)*.012*bOn);
+  const LB=pathB.getLength(),phb=lk(phB,t);
+  for(let i=0;i<90;i++){const s=((i/90)*LB+phb)%LB;setP(fb,i,pathB.getPointAt(s/LB),bOn?1:0);}fb.instanceMatrix.needsUpdate=true;
+  for(let i=0;i<30;i++){const u=((t*1.8+i/30)%1);setP(jetB,i,P(20.6+Math.sin(i*2)*.15*u,.2-u*.6,.6+Math.cos(i)*.15*u),bOn?1:0);}jetB.instanceMatrix.needsUpdate=true;
+  for(let i=0;i<40;i++){const u=((t*1.2+i/40)%1);setP(inB,i,P(12.95+u*.5,-1.1-u*u*(sewH*-1-1.1+.1)*1.0,-.6+Math.sin(i*3)*.1),1);}inB.instanceMatrix.needsUpdate=true;
+  // owner: worried while it floods, relieved when the pump drains it
+  if(t<14.5){const panic=ramp(t,3,4.4);pose(dono,{la:[-2.6*panic,.9*panic],ra:[-2.6*panic,-.9*panic],ht:.3*(1-panic),hy:Math.sin(t*7)*.3*panic,smile:false});dono.root.position.y=-3.2;}
+  else{const happy=ramp(t,19.5,20.5);pose(dono,{la:[0,.1+2.5*happy],ra:[0,-.1-2.5*happy],ht:.2*(1-happy),smile:happy>.5});dono.root.position.y=-3.2+(happy>.5?Math.abs(Math.sin(t*6))*.15:0);}
+  renderer.render(scene,camera);
+}
+function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src;});}
+async function renderAt(t,i){
+  const c=cutAmt(t);
+  if(c<1){const frame=await loadImg("src/"+String(i+1).padStart(5,"0")+".jpg");ctx.globalAlpha=1;ctx.drawImage(frame,0,0,W,H);}
+  if(c>0){draw3D(t);ctx.globalAlpha=c;ctx.drawImage(renderer.domElement,0,0);ctx.globalAlpha=1;}
+  return out.toDataURL("image/jpeg",.9);
+}
+window.renderAt=renderAt;window.ready=true;
+</script></body></html>
