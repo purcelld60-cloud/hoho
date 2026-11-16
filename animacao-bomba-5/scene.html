@@ -1,0 +1,233 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head><body>
+<canvas id="out" width="720" height="1280"></canvas>
+<script src="three.min.js"></script>
+<script>
+"use strict";
+/* Vídeo 5 — bomba de poço com e sem control box.
+   Só a animação aparece; nas partes em que ele fala para a câmera a tela fica preta (o vídeo é encaixado na edição). */
+const W=720,H=1280;
+const out=document.getElementById("out"),ctx=out.getContext("2d");
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const sm=x=>{x=clamp(x);return x*x*(3-2*x);};
+const ramp=(t,a,b)=>sm((t-a)/(b-a));
+const inR=(t,a,b)=>t>=a&&t<b;
+
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(1);renderer.setSize(W,H);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();scene.background=new THREE.Color("#cfe6f5");scene.fog=new THREE.Fog("#cfe6f5",40,110);
+const camera=new THREE.PerspectiveCamera(48,W/H,.05,300);
+scene.add(new THREE.HemisphereLight(0xffffff,0x7a6a52,.85));
+const sun=new THREE.DirectionalLight(0xfff4e2,.8);sun.position.set(-6,16,14);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-6,far:60});scene.add(sun);
+const under=new THREE.PointLight(0xdbeafe,.7,14,2);scene.add(under);
+const M=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.8},o));
+function mesh(g,m,x=0,y=0,z=0,par=scene){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;par.add(o);return o;}
+function box(x0,x1,y0,y1,z0,z1,m,par=scene){return mesh(new THREE.BoxGeometry(x1-x0,y1-y0,z1-z0),m,(x0+x1)/2,(y0+y1)/2,(z0+z1)/2,par);}
+
+/* ---------- ground + well shaft (cut-away) ---------- */
+const WX=.2,WZ=.6,DEPTH=24.5,ZF=1.2;
+const layers=[[0,-1.2,"#8a6a4a"],[-1.2,-2.5,"#9b7b55"],[-2.5,-7,"#7d6a52"],[-7,-12,"#a08060"],[-12,-17,"#6f5d4a"],[-17,-25,"#5e544a"]];
+layers.forEach(([y0,y1,c])=>{box(-30,WX-.6,y1,y0,-3,ZF,M(c));box(WX+.6,30,y1,y0,-3,ZF,M(c));box(WX-.6,WX+.6,y1,y0,-3,WZ-.6,M(c));});
+box(-30,30,-27,-24.5,-3,ZF,M("#4b443d"));
+box(-30,30,0,.08,-3,ZF,M("#6fae54"));
+// aquifer tint
+box(WX-.6,WX+.6,-24.5,-2.5,WZ-.62,WZ-.6,M("#4a7aa8"));
+// well casing + water column + well head
+const casing=mesh(new THREE.CylinderGeometry(.42,.42,DEPTH+.6,24,1,true),M("#cbd5e1",{transparent:true,opacity:.22,side:THREE.DoubleSide,depthWrite:false}),WX,-DEPTH/2+.3,WZ);casing.castShadow=false;
+const wellWater=mesh(new THREE.CylinderGeometry(.4,.4,DEPTH-2.5,24),M("#3a8fd6",{transparent:true,opacity:.35,depthWrite:false,emissive:"#0b3d6b"}),WX,-2.5-(DEPTH-2.5)/2,WZ);wellWater.castShadow=false;
+mesh(new THREE.CylinderGeometry(.6,.6,.35,24),M("#9ca3af"),WX,.2,WZ);
+// water tower + tank (destination of the water)
+const TX=-3.6;
+[[-.5,-.5],[.5,-.5],[-.5,.5],[.5,.5]].forEach(([dx,dz])=>mesh(new THREE.CylinderGeometry(.06,.06,3,8),M("#6b7280"),TX+dx,1.5,dz-.4));
+box(TX-.7,TX+.7,2.95,3.05,-1.1,.3,M("#6b7280"));
+mesh(new THREE.CylinderGeometry(.9,.85,1.3,24),M("#2563eb",{roughness:.5}),TX,3.7,-.4);
+mesh(new THREE.CylinderGeometry(.95,.95,.1,24),M("#1e3a8a"),TX,4.4,-.4);
+// small house in the back
+box(4.2,8.5,0,2.6,-2.8,-1.2,M("#f2e6d0"));const rf=mesh(new THREE.CylinderGeometry(.01,3.2,1.2,4,1),M("#b5473a"),6.35,3.2,-2.0);rf.rotation.y=Math.PI/4;rf.scale.set(1,1,.45);
+
+/* ---------- post with power panel + control box ---------- */
+const PX=2.3;
+box(PX-.08,PX+.08,0,2.8,-.08,.08,M("#78716c"));
+box(PX-.35,PX+.35,1.85,2.55,.08,.32,M("#9ca3af"));box(PX-.2,PX+.2,2.15,2.4,.32,.34,M("#e5e7eb"));
+const cbox=new THREE.Group();cbox.position.set(PX,1.15,.1);scene.add(cbox);
+const cbM=M("#d9d3c3",{roughness:.6});box(-.32,.32,-.42,.42,0,.03,M("#bdb6a5"),cbox);box(-.32,-.29,-.42,.42,0,.28,cbM,cbox);box(.29,.32,-.42,.42,0,.28,cbM,cbox);box(-.32,.32,.39,.42,0,.28,cbM,cbox);box(-.32,.32,-.42,-.39,0,.28,cbM,cbox);
+const cap=new THREE.Group();cap.position.set(-.08,.05,.15);cbox.add(cap);
+const capM=M("#94a3b8",{metalness:.5,roughness:.35});mesh(new THREE.CylinderGeometry(.09,.09,.32,18),capM,0,0,0,cap);
+mesh(new THREE.CylinderGeometry(.095,.095,.04,18),M("#1f2937"),0,.17,0,cap);
+box(.08,.24,-.3,.25,.02,.06,M("#374151"),cbox);
+const cboxLed=mesh(new THREE.SphereGeometry(.03,8,6),M("#22c55e",{emissive:"#22c55e"}),.2,.32,.29,cbox);
+const lid=new THREE.Group();lid.position.set(-.32,0,.29);cbox.add(lid);
+box(0,.64,-.42,.42,0,.04,M("#e4dfd0",{roughness:.6}),lid);box(.12,.52,.12,.3,.04,.05,M("#334155"),lid);[[.06,.36],[.58,.36],[.06,-.36],[.58,-.36]].forEach(([x,y])=>mesh(new THREE.CylinderGeometry(.02,.02,.02,8),M("#6b7280"),x,y,.05,lid).rotation.x=Math.PI/2);
+const newCap=new THREE.Group();scene.add(newCap);mesh(new THREE.CylinderGeometry(.09,.09,.32,18),M("#60a5fa",{metalness:.4,roughness:.3}),0,0,0,newCap);mesh(new THREE.CylinderGeometry(.095,.095,.04,18),M("#1f2937"),0,.17,0,newCap);
+
+/* ---------- pumps (slim submersible well pumps) ---------- */
+function wellPump(){const g=new THREE.Group();scene.add(g);const b=new THREE.Group();g.add(b);
+  mesh(new THREE.CylinderGeometry(.2,.2,.9,20),M("#d6dadf",{metalness:.8,roughness:.25}),0,.45,0,b);
+  mesh(new THREE.CylinderGeometry(.205,.205,.18,20),M("#1f2937",{wireframe:false}),0,.98,0,b);
+  for(let i=0;i<10;i++)mesh(new THREE.BoxGeometry(.02,.16,.04),M("#111"),Math.cos(i/10*Math.PI*2)*.2,.98,Math.sin(i/10*Math.PI*2)*.2,b);
+  mesh(new THREE.CylinderGeometry(.2,.2,.9,20),M("#1d4ed8",{metalness:.4,roughness:.35}),0,1.52,0,b);
+  mesh(new THREE.CylinderGeometry(.12,.2,.2,20),M("#d6dadf",{metalness:.8,roughness:.25}),0,2.07,0,b);
+  g.userData.body=b;return g;}
+const pumpS=wellPump();pumpS.position.set(WX,-5.6,WZ);
+const pumpD=wellPump();pumpD.position.set(WX,-24.2,WZ);
+const PS_TOP=-5.6+2.17,PD_TOP=-24.2+2.17;
+// drop pipes + surface line to the tower
+const pipeM=M("#475569",{roughness:.5,transparent:true,opacity:.55});
+function seg(a,b,r,m){const c=mesh(new THREE.CylinderGeometry(r,r,a.distanceTo(b),12,1,true),m);c.castShadow=false;c.position.copy(a).add(b).multiplyScalar(.5);c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());return c;}
+const V=(x,y,z=WZ)=>new THREE.Vector3(x,y,z);
+const dropS=seg(V(WX-.05,PS_TOP),V(WX-.05,.35),.07,pipeM),dropD=seg(V(WX-.05,PD_TOP),V(WX-.05,.35),.07,pipeM);
+[[V(WX-.05,.35),V(WX-.05,.5)],[V(WX-.05,.5),V(TX+.45,.5,WZ)],[V(TX+.45,.5,WZ),V(TX+.45,.5,-.4)],[V(TX+.45,.5,-.4),V(TX+.45,4.5,-.4)],[V(TX+.45,4.5,-.4),V(TX,4.5,-.4)]].forEach(([a,b])=>seg(a,b,.07,pipeM));
+function pathOf(pts){const c=new THREE.CurvePath();for(let i=0;i<pts.length-1;i++)c.add(new THREE.LineCurve3(pts[i],pts[i+1]));return c;}
+const surf=[V(WX-.05,.5),V(TX+.45,.5,WZ),V(TX+.45,.5,-.4),V(TX+.45,4.5,-.4),V(TX,4.5,-.4)];
+const waterPathS=pathOf([V(WX-.05,PS_TOP),...surf]),waterPathD=pathOf([V(WX-.05,PD_TOP),...surf]);
+const NW=140;const waterInst=new THREE.InstancedMesh(new THREE.SphereGeometry(.06,8,6),M("#2b8be6",{emissive:"#0b4f8f",roughness:.2}),NW);waterInst.castShadow=false;scene.add(waterInst);
+const dummy=new THREE.Object3D();
+
+/* ---------- electric wires (grow from the post down to the pump) ---------- */
+const WIRE={preto:"#111827",azul:"#2563eb",marrom:"#8b5a2b",verde:"#16a34a"};
+function wireSet(names,startY,pumpTop,tag){
+  return names.map((n,k)=>{const off=(k-(names.length-1)/2)*.055;
+    const pts=[V(PX+off,startY,.22),V(PX+off,.12,.22),V(WX+.17,.12,WZ+off*.6),V(WX+.17+off*.3,pumpTop-.05,WZ+off*.6)];
+    const curve=pathOf(pts);const tub=200;const geo=new THREE.TubeGeometry(curve,tub,.022,6,false);
+    const m=mesh(geo,M(WIRE[n],{roughness:.5,emissive:"#000"}));m.castShadow=false;
+    const pulse=[];for(let i=0;i<4;i++){pulse.push(mesh(new THREE.SphereGeometry(.032,10,8),new THREE.MeshBasicMaterial({color:"#fde047"})));}
+    return {n,curve,geo,m,tub,pulse,tag};});}
+const W_SN=wireSet(["preto","azul","verde"],1.9,PS_TOP,"SN");
+const W_SB=wireSet(["preto","azul","marrom","verde"],.73,PS_TOP,"SB");
+const W_DB=wireSet(["preto","azul","marrom","verde"],.73,PD_TOP,"DB");
+const ALLW=[...W_SN,...W_SB,...W_DB];
+
+/* ---------- mini scenes: caixa d'água & represa ---------- */
+// reservoir tank cut-away (x=30)
+const RX=30;box(RX-6,RX+6,-1,0,-6,4,M("#6fae54"));
+mesh(new THREE.CylinderGeometry(1.6,1.6,2.4,32,1,true,Math.PI*.5,Math.PI),M("#2563eb",{side:THREE.DoubleSide,roughness:.5}),RX,1.2,0);
+mesh(new THREE.CylinderGeometry(1.6,1.6,.1,32),M("#1e3a8a"),RX,.05,0);
+const tankW=mesh(new THREE.CylinderGeometry(1.55,1.55,1.8,32,1,false,Math.PI*.5,Math.PI),M("#3a8fd6",{transparent:true,opacity:.55,emissive:"#0b3d6b",depthWrite:false}),RX,1.0,0);tankW.castShadow=false;
+const pumpT=wellPump();pumpT.position.set(RX,.15,-.6);pumpT.scale.setScalar(.8);
+seg(new THREE.Vector3(RX,1.9,-.6),new THREE.Vector3(RX,3.0,-.6),.06,pipeM);seg(new THREE.Vector3(RX,3.0,-.6),new THREE.Vector3(RX+2.4,3.0,-.6),.06,pipeM);
+// represa / pond (x=45)
+const QX=45;box(QX-8,QX+8,-1,0,-8,4,M("#6fae54"));
+const pond=mesh(new THREE.CylinderGeometry(4,3.6,.2,40),M("#2f86c9",{roughness:.2,emissive:"#0b3d6b"}),QX,.02,-1.2);pond.castShadow=false;
+box(QX+1.6,QX+4.6,.3,.42,-.6,.1,M("#8b5a2b"));for(let i=0;i<4;i++)mesh(new THREE.CylinderGeometry(.06,.06,.8,8),M("#6b4423"),QX+1.8+i*.9,0,-.25);
+const pumpP=wellPump();pumpP.position.set(QX+1.8,-1.4,-.25);pumpP.scale.setScalar(.7);
+seg(new THREE.Vector3(QX+1.8,.1,-.25),new THREE.Vector3(QX+1.8,.5,-.25),.05,pipeM);seg(new THREE.Vector3(QX+1.8,.5,-.25),new THREE.Vector3(QX+6,.5,-.25),.05,pipeM);
+for(let i=0;i<10;i++){const a=i/10*Math.PI*2;mesh(new THREE.IcosahedronGeometry(.5+((i*7)%3)*.2,0),M("#3f8f3a"),QX+Math.cos(a)*5.2,.4,-1.2+Math.sin(a)*4.6);}
+
+/* ---------- technician ---------- */
+function person({skin,shirt,pants,cap,s=1}){const root=new THREE.Group(),body=new THREE.Group();root.add(body);
+  const Sk=M(skin),Sh=M(shirt),Pa=M(pants);
+  const leg=x=>{const g=new THREE.Group();g.position.set(x,.9,0);mesh(new THREE.BoxGeometry(.26,.9,.28),Pa,0,-.45,0,g);body.add(g);return g;};
+  const legL=leg(-.16),legR=leg(.16);mesh(new THREE.BoxGeometry(.72,.9,.42),Sh,0,1.35,0,body);
+  const head=new THREE.Group();head.position.y=1.82;body.add(head);mesh(new THREE.SphereGeometry(.32,16,12),Sk,0,.28,0,head);
+  mesh(new THREE.SphereGeometry(.34,16,10,0,Math.PI*2,0,Math.PI/2),M(cap),0,.33,0,head);mesh(new THREE.BoxGeometry(.4,.04,.3),M(cap),0,.36,.3,head);
+  const eM=M("#111");mesh(new THREE.SphereGeometry(.045,8,6),eM,-.11,.33,.29,head);mesh(new THREE.SphereGeometry(.045,8,6),eM,.11,.33,.29,head);
+  mesh(new THREE.TorusGeometry(.085,.02,6,12,Math.PI),M("#7a2a2a"),0,.2,.3,head).rotation.z=Math.PI;
+  const arm=x=>{const g=new THREE.Group();g.position.set(x,1.72,0);mesh(new THREE.BoxGeometry(.2,.75,.22),Sh,0,-.36,0,g);mesh(new THREE.SphereGeometry(.11,8,6),Sk,0,-.78,0,g);body.add(g);return g;};
+  const armL=arm(-.47),armR=arm(.47);root.scale.setScalar(s);scene.add(root);return {root,legL,legR,armL,armR};}
+const tec=person({skin:"#a86b3c",shirt:"#f59e0b",pants:"#1e3a5f",cap:"#1e3a5f",s:.85});
+
+/* ---------- smoke + sparks for the burnt capacitor ---------- */
+const smoke=[];for(let i=0;i<26;i++)smoke.push(mesh(new THREE.SphereGeometry(.12,8,6),M("#4b5563",{transparent:true,opacity:.6,depthWrite:false})));
+const sparks=[];for(let i=0;i<14;i++)sparks.push(mesh(new THREE.SphereGeometry(.025,6,4),new THREE.MeshBasicMaterial({color:"#fde047"})));
+
+/* ---------- timeline ---------- */
+// segments where the animation is shown; everything else is black
+const SEGS=[[8.0,18.3],[18.5,33.6],[39.0,44.3],[46.0,59.0]];
+const shown=t=>SEGS.some(([a,b])=>t>=a&&t<b);
+// configuration per moment
+function cfg(t){
+  if(inR(t,8,18.3)||inR(t,39,41))return {depth:"S",box:false,wires:"SN"};
+  if(inR(t,18.5,33.6))return {depth:"S",box:true,wires:"SB"};
+  if(inR(t,41,42))return {mini:"tank"};
+  if(inR(t,42,42.5))return {mini:"pond"};
+  if(inR(t,42.5,44.3))return {depth:"D",box:false,wires:null};
+  return {depth:"D",box:true,wires:"DB"};
+}
+// how much of each wire set is drawn
+function wireGrow(set,t,k){
+  if(set==="SN"){if(k<2)return t<39?ramp(t,10.0,11.9):1;return t<39?ramp(t,14.6,16.2):1;}
+  if(set==="SB")return ramp(t,20.5+k*.25,21.6+k*.25);
+  if(set==="DB")return ramp(t,46.4+k*.15,47.9+k*.15);
+  return 0;}
+// electric pulses on a wire
+function pulseOn(n,t){
+  if(inR(t,12.5,14.5))return n==="preto"||n==="azul";
+  if(inR(t,22.0,25.0))return n==="preto"||n==="azul";
+  if(inR(t,26.0,28.4))return n==="marrom";
+  if(inR(t,28.5,31.5))return n==="verde";
+  if(inR(t,16.5,18.3)||inR(t,32,33.6)||inR(t,49,51))return true;
+  return false;}
+function pumpOn(t){const c=cfg(t);if(c.mini)return true;
+  if(c.wires==="SN")return t>16.4;if(c.wires==="SB")return t>21.9;if(c.depth==="D")return (t>47.9&&t<51.1)||t>57.9;return false;}
+const capBurnt=t=>t>51.0&&t<57.6;
+const lidOpen=t=>Math.max(ramp(t,26.1,26.8)*(1-ramp(t,29.4,30)),ramp(t,55.6,56.3));
+// camera shots
+const S=(t,p,q)=>[t,p,q];
+const SHOTS=[
+ S(8.0,[-.4,1.6,13],[-.4,-.6,0]),S(9.9,[-.2,1.4,12.2],[-.2,-.8,0]),
+ S(10.0,[1.2,-.6,8.6],[1.2,-1.6,0]),S(12.4,[1.0,-1.2,8.2],[1.0,-2.1,0]),
+ S(12.5,[.9,-1.6,8.2],[.9,-2.4,0]),S(16.4,[.9,-1.8,8.0],[.9,-2.6,0]),
+ S(16.5,[PX-.15,.6,1.15],[PX,.45,.22]),S(18.3,[PX-.1,.55,1.05],[PX,.42,.22]),
+ S(18.5,[PX-.2,1.5,3.4],[PX,1.15,0]),S(20.4,[PX-.2,1.5,3.2],[PX,1.15,0]),
+ S(20.5,[1.2,-1.2,8.6],[1.2,-2.0,0]),S(25.9,[1.0,-1.6,8.2],[1.0,-2.4,0]),
+ S(26.0,[PX-.25,1.45,2.4],[PX,1.15,0]),S(28.4,[PX-.25,1.45,2.3],[PX,1.15,0]),
+ S(28.5,[1.2,-1.2,8.6],[1.2,-2.0,0]),S(31.9,[1.0,-1.4,8.4],[1.0,-2.2,0]),
+ S(32.0,[PX-.15,.6,1.15],[PX,.45,.22]),S(33.6,[PX-.1,.55,1.05],[PX,.42,.22]),
+ S(39.0,[-.4,1.4,12.5],[-.4,-1.0,0]),S(40.95,[-.4,1.4,12.2],[-.4,-1.0,0]),
+ S(41.0,[RX+.6,2.6,7.5],[RX,1.0,0]),S(41.95,[RX+.2,2.6,7.2],[RX,1.0,0]),
+ S(42.0,[QX+3,4.5,8.5],[QX+1.5,0,-.6]),S(42.45,[QX+3,4.4,8.3],[QX+1.5,0,-.6]),
+ S(42.5,[WX+.4,1.6,6.5],[WX,0,WZ]),S(44.3,[WX+.4,-21.4,4.6],[WX,-22.6,WZ]),
+ S(46.0,[PX-.4,1.5,4.2],[PX-.2,1.0,0]),S(47.3,[PX-.4,1.5,4.0],[PX-.2,1.0,0]),S(48.9,[WX+.5,-21.6,3.4],[WX,-22.4,WZ]),
+ S(49.0,[WX+.6,-21.6,2.2],[WX,-22.15,WZ]),S(50.95,[WX+.5,-21.7,2.0],[WX,-22.15,WZ]),
+ S(51.0,[PX-.25,1.45,2.4],[PX,1.15,0]),S(52.45,[PX-.25,1.45,2.3],[PX,1.15,0]),
+ S(52.5,[WX+.5,-22.0,4.2],[WX,-22.4,WZ]),S(54.4,[WX+.5,1.2,9.5],[WX+.6,-.4,0]),
+ S(54.5,[PX+.4,1.6,5.4],[PX+.4,.9,0]),S(56.4,[PX+.2,1.5,3.6],[PX,1.1,0]),
+ S(56.5,[PX+.15,1.5,3.3],[PX+.35,1.05,0]),S(59,[PX+.1,1.5,3.2],[PX+.35,1.05,0])];
+function camAt(t){let i=0;while(i<SHOTS.length-2&&t>=SHOTS[i+1][0])i++;const a=SHOTS[i],b=SHOTS[i+1];
+  // shots that start within .06s of each other are hard cuts; otherwise ease between them
+  const k=(b[0]-a[0])<.06?1:sm((t-a[0])/(b[0]-a[0]));const lp=(u,v)=>u.map((x,j)=>x+(v[j]-x)*k);return [lp(a[1],b[1]),lp(a[2],b[2])];}
+
+const DT=1/120;const ph=[0],fanA=[0];for(let i=1;i<=62/DT;i++){const t=i*DT;ph.push(ph[i-1]+(pumpOn(t)?3:0)*DT);}
+const lk=(a,t)=>a[Math.min(a.length-1,Math.round(t/DT))];
+
+function draw3D(t){
+  const c=cfg(t);const [cp,ct]=camAt(t);camera.position.set(...cp);camera.lookAt(...ct);
+  under.position.set(ct[0]+.6,ct[1]+.6,2.2);
+  const on=pumpOn(t);
+  pumpS.visible=c.depth==="S";pumpD.visible=c.depth==="D";dropS.visible=c.depth==="S";dropD.visible=c.depth==="D";
+  [pumpS,pumpD,pumpT,pumpP].forEach(p=>p.userData.body.position.set(on?Math.sin(t*90)*.008:0,0,on?Math.cos(t*80)*.006:0));
+  cbox.visible=!!c.box;
+  if(c.box){const pop=c.wires==="SB"?ramp(t,18.6,19.3):1;cbox.scale.setScalar(Math.max(.001,pop));}
+  // wires
+  ALLW.forEach((w,k)=>{const vis=c.wires===w.tag;w.m.visible=vis;w.pulse.forEach(p=>p.visible=false);if(!vis)return;
+    const kk=["preto","azul","marrom","verde"].indexOf(w.n);const g=wireGrow(w.tag,t,w.tag==="SN"?(w.n==="verde"?2:kk):kk);
+    w.geo.setDrawRange(0,Math.floor(g*w.tub)*6*6);
+    const glow=pulseOn(w.n,t)&&!(w.tag==="DB"&&capBurnt(t));w.m.material.emissive.set(glow?(w.n==="preto"?"#3f3f46":w.n==="verde"?"#065f46":w.n==="azul"?"#1e3a8a":"#7c2d12"):"#000");
+    if(glow&&g>.99)w.pulse.forEach((p,i)=>{p.visible=true;const u=((t*.35+i/4+k*.09)%1);p.position.copy(w.curve.getPointAt(u));});});
+  // water flow up the drop pipe to the tower
+  const wp=c.depth==="D"?waterPathD:waterPathS,L=wp.getLength(),phase=lk(ph,t);
+  for(let i=0;i<NW;i++){const s=((i/NW)*L+phase)%L;dummy.position.copy(wp.getPointAt(s/L));dummy.scale.setScalar(on&&!c.mini?1:0);dummy.updateMatrix();waterInst.setMatrixAt(i,dummy.matrix);}
+  waterInst.instanceMatrix.needsUpdate=true;
+  // control box: lid, capacitor burn, swap
+  lid.rotation.y=-1.9*lidOpen(t);
+  const burnt=capBurnt(t);capM.color.set(burnt?"#1f1f1f":"#94a3b8");capM.emissive.set(burnt&&t<53?(Math.sin(t*30)>0?"#7f1d1d":"#000"):"#000");
+  cboxLed.material.color.set(burnt?"#ef4444":"#22c55e");cboxLed.material.emissive.set(burnt?"#ef4444":"#22c55e");
+  const out1=ramp(t,56.6,57.3);cap.position.set(-.08+out1*.55,.05+out1*.15,.15+out1*.5);cap.visible=!(t>57.35);
+  const in1=ramp(t,57.3,57.9);newCap.visible=t>57.0;newCap.position.set(PX-.08+(1-in1)*.6,1.2+(1-in1)*.2,.25+(1-in1)*.55);
+  if(t>57.9){cap.visible=true;cap.position.set(-.08,.05,.15);newCap.visible=false;capM.color.set("#60a5fa");}
+  smoke.forEach((m,i)=>{const age=t-51.05-i*.06;const vis=c.box&&age>0&&t<55.5;m.visible=vis;if(!vis)return;const u=(age%1.8)/1.8;
+    m.position.set(PX-.08+Math.sin(i*2.1)*.15*u,1.4+u*1.4,.3+Math.cos(i*1.3)*.12*u);m.scale.setScalar(.6+u*2);m.material.opacity=.55*(1-u);});
+  sparks.forEach((m,i)=>{const u=((t*2.6+i/sparks.length)%1);const vis=c.box&&t>51.0&&t<52.6;m.visible=vis;if(vis)m.position.set(PX-.08+Math.sin(i*5)*u*.35,1.25+u*.3-u*u*.5,.35+Math.cos(i*3)*u*.3);});
+  // technician walks to the box and swaps the capacitor
+  tec.root.visible=t>54.5&&t<59;const wk=ramp(t,54.6,55.7);tec.root.position.set(PX+2.6-1.75*wk,0,.35);tec.root.rotation.y=wk<1?-Math.PI/2:-.35;
+  const st=t<55.7?Math.sin(t*12)*.6:0;tec.legL.rotation.x=st;tec.legR.rotation.x=-st;tec.armL.rotation.set(-st,0,0);
+  tec.armR.rotation.set(t>55.6?-1.5:st,0,t>55.6?.25:0);
+  renderer.render(scene,camera);
+}
+async function renderAt(t){
+  if(shown(t)){draw3D(t);ctx.drawImage(renderer.domElement,0,0);}else{ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);}
+  return out.toDataURL("image/jpeg",.9);
+}
+window.renderAt=renderAt;window.ready=true;
+</script></body></html>
