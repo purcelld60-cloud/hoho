@@ -1,0 +1,357 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000}canvas{display:block}</style></head><body>
+<canvas id="out" width="720" height="1280"></canvas>
+<script src="three.min.js"></script>
+<script>
+"use strict";
+/* Vídeo 2 — "a água da concessionária chega fraco": prédio de 3 andares, bomba com controlador
+   (interno/externo, pressostato + fluxostato), closes só na bomba quando ele fala dela. */
+const W=720,H=1280;
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(1);renderer.setSize(W,H);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const out=document.getElementById("out"),ctx=out.getContext("2d");
+const scene=new THREE.Scene();
+scene.background=new THREE.Color("#cfe6f5");scene.fog=new THREE.Fog("#cfe6f5",45,100);
+const camera=new THREE.PerspectiveCamera(48,W/H,.05,200);
+scene.add(new THREE.HemisphereLight(0xffffff,0x8a7a62,.85));
+const sun=new THREE.DirectionalLight(0xfff4e2,.9);sun.position.set(-8,20,14);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-14,right:14,top:16,bottom:-6,far:70});scene.add(sun);
+
+const M=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.75},o));
+function mesh(g,m,x=0,y=0,z=0,par=scene){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;par.add(o);return o;}
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const sm=x=>{x=clamp(x);return x*x*(3-2*x);};
+const ramp=(t,a,b)=>sm((t-a)/(b-a));
+const win=(t,a,b,f=.35)=>Math.min(ramp(t,a,a+f),1-ramp(t,b-f,b));
+
+/* ---------- ground: street + soil cutaway ---------- */
+mesh(new THREE.BoxGeometry(40,3,6),M("#9b7653"),0,-1.5,-1.4);
+mesh(new THREE.BoxGeometry(40,.12,6),M("#6fae54"),6,0,-1.4);
+mesh(new THREE.BoxGeometry(11,.14,6),M("#5b6068"),-6.5,.01,-1.4);
+for(let x=-11;x<-1.5;x+=1.6)mesh(new THREE.BoxGeometry(.8,.02,.12),M("#f3f3f3"),x,.09,-1.4);
+mesh(new THREE.BoxGeometry(2.2,.3,6),M("#b9bcc2"),-.2,.12,-1.4);
+{let r=7;const rnd=()=>(r=(r*9301+49297)%233280)/233280;for(let i=0;i<14;i++)mesh(new THREE.BoxGeometry(.3+rnd()*.4,.12,.05),M("#7d5c3e"),-10+rnd()*20,-.6-rnd()*2.2,1.62);}
+
+/* ---------- 3-storey house (cutaway) ---------- */
+const FH=3.6, FLOORS=3, TOP=FH*FLOORS;
+const wallM=M("#f2e6d0"),slab=M("#cfc6b6");
+mesh(new THREE.BoxGeometry(5.6,TOP,.25),wallM,4.4,TOP/2,-1.6);
+mesh(new THREE.BoxGeometry(.25,TOP,3.4),wallM,1.7,TOP/2,0);
+mesh(new THREE.BoxGeometry(.25,TOP,3.4),wallM,7.1,TOP/2,0);
+for(let f=1;f<FLOORS;f++)mesh(new THREE.BoxGeometry(5.6,.25,3.4),slab,4.4,f*FH,0);
+mesh(new THREE.BoxGeometry(5.9,.3,3.6),slab,4.4,TOP+.05,0);
+mesh(new THREE.BoxGeometry(5.6,.12,3.4),M("#b88a5a"),4.4,.1,0);
+// ground floor: sofa + table
+mesh(new THREE.BoxGeometry(1.8,.5,.8),M("#3d6fa8"),3.4,.45,-1);mesh(new THREE.BoxGeometry(1.8,.6,.2),M("#3d6fa8"),3.4,.85,-1.35);
+mesh(new THREE.BoxGeometry(1,.08,.7),M("#8a5a35"),5.6,.8,-.6);mesh(new THREE.BoxGeometry(.08,.7,.08),M("#8a5a35"),5.6,.45,-.6);
+// 2nd floor: bathroom + bed
+mesh(new THREE.BoxGeometry(1.8,.4,1.2),M("#f7f7f7"),5.6,FH+.4,-.9);mesh(new THREE.BoxGeometry(1.8,.3,.4),M("#e07a5f"),5.6,FH+.7,-.5);
+mesh(new THREE.CylinderGeometry(.05,.05,2.6,8),M("#b0b7bf",{metalness:.6,roughness:.3}),2.3,FH+1.4,-1.3);
+mesh(new THREE.CylinderGeometry(.25,.12,.12,14),M("#b0b7bf",{metalness:.6,roughness:.3}),2.6,FH+2.6,-1.2);
+mesh(new THREE.BoxGeometry(.4,.05,.05),M("#b0b7bf"),2.45,FH+2.65,-1.25);
+mesh(new THREE.BoxGeometry(1.4,.12,1.4),M("#dfe8ee"),2.65,FH+.2,-.8);
+const showerDrops=[];for(let i=0;i<60;i++)showerDrops.push(mesh(new THREE.SphereGeometry(.05,6,4),M("#4aa3df",{emissive:"#1a5d8f"}),2.6,6,-1.2));
+// 3rd floor: kitchen counter + sink tap + plant
+mesh(new THREE.BoxGeometry(2.6,1,.8),M("#d6d3d1"),4.6,2*FH+.5,-1.1);
+mesh(new THREE.BoxGeometry(.7,.1,.5),M("#9ca3af"),4.2,2*FH+1.02,-1.05);
+mesh(new THREE.CylinderGeometry(.04,.04,.4,8),M("#b0b7bf",{metalness:.6}),4.2,2*FH+1.25,-1.35);
+const tapDrops=[];for(let i=0;i<14;i++)tapDrops.push(mesh(new THREE.SphereGeometry(.035,6,4),M("#4aa3df",{emissive:"#1a5d8f"}),4.2,2*FH+1.3,-1.2));
+mesh(new THREE.CylinderGeometry(.22,.18,.4,10),M("#b45309"),6.4,2*FH+.35,-1);mesh(new THREE.IcosahedronGeometry(.42,0),M("#3f8f3a"),6.4,2*FH+.85,-1);
+for(let f=0;f<FLOORS;f++){mesh(new THREE.BoxGeometry(.05,1,1.2),M("#a8d4f0",{roughness:.1}),7.24,f*FH+1.8,0);}
+// floor highlight boxes (1º, 2º, 3º andar)
+const floorHL=[0,1,2].map(f=>{const m=mesh(new THREE.BoxGeometry(5.3,FH-.35,3.1),new THREE.MeshBasicMaterial({color:"#facc15",transparent:true,opacity:0,depthWrite:false}),4.4,f*FH+FH/2+.05,0);m.castShadow=false;m.receiveShadow=false;return m;});
+
+/* ---------- water tank ---------- */
+const tank=new THREE.Group();tank.position.set(2.7,TOP+.2,0);scene.add(tank);
+const TH=1.5,TR=.95;
+mesh(new THREE.CylinderGeometry(TR,TR*.92,TH,28,1,true),M("#3c7fc4",{transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}),0,TH/2,0,tank).castShadow=false;
+mesh(new THREE.CylinderGeometry(TR*.92,TR*.92,.05,28),M("#2d5f94"),0,.02,0,tank);
+mesh(new THREE.CylinderGeometry(TR*1.04,TR*1.04,.1,28),M("#2d5f94"),0,TH+.05,0,tank);
+const tankWater=mesh(new THREE.CylinderGeometry(TR*.9,TR*.88,1,28),M("#2f8fe0",{transparent:true,opacity:.85,emissive:"#0b3d6b"}),0,.5,0,tank);
+const floatArm=new THREE.Group();floatArm.position.set(-TR*.75,TH-.25,0);tank.add(floatArm);
+mesh(new THREE.BoxGeometry(.9,.04,.04),M("#888"),.45,0,0,floatArm);
+mesh(new THREE.SphereGeometry(.18,16,12),M("#ff8c1a",{emissive:"#4a2200"}),.9,0,0,floatArm);
+const valveLed=mesh(new THREE.SphereGeometry(.08,10,8),M("#22c55e",{emissive:"#22c55e"}),-TR*.75,TH-.05,.2,tank);
+
+/* ---------- pipe path ---------- */
+const P=(x,y,z=1.95)=>new THREE.Vector3(x,y,z);
+const RISE=TOP+2.1;
+const segs=[[P(-9,-1.1),P(-2.6,-1.1)],[P(-2.6,-1.1),P(-2.6,.5)],[P(-2.6,.5),P(1.25,.5)],[P(1.25,.5),P(1.25,RISE)],[P(1.25,RISE),P(1.25,RISE,0)],[P(1.25,RISE,0),P(2.4,RISE,0)],[P(2.4,RISE,0),P(2.4,TOP+1.6,0)]];
+const path=new THREE.CurvePath();segs.forEach(([a,b])=>path.add(new THREE.LineCurve3(a,b)));
+const L=path.getLength();
+const lens=[];{let acc=0;segs.forEach(([a,b])=>{lens.push(acc);acc+=a.distanceTo(b);});}
+const PUMP_X=-.7;
+const pipeM=M("#9fb8c8",{transparent:true,opacity:.33,roughness:.15,depthWrite:false});
+segs.forEach(([a,b])=>{const len=a.distanceTo(b);const c=mesh(new THREE.CylinderGeometry(.17,.17,len,16,1,true),pipeM);c.castShadow=false;
+  c.position.copy(a).add(b).multiplyScalar(.5);c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());});
+[P(-2.6,-1.1),P(-2.6,.5),P(1.25,.5),P(1.25,RISE),P(1.25,RISE,0),P(2.4,RISE,0)].forEach(p=>mesh(new THREE.SphereGeometry(.2,14,10),M("#8ea4b3",{roughness:.3}),p.x,p.y,p.z));
+const mainPipe=mesh(new THREE.CylinderGeometry(.32,.32,9,18,1,true),M("#2f6db5",{transparent:true,opacity:.35,depthWrite:false}),-6.5,-1.1,1.95);mainPipe.rotation.z=Math.PI/2;mainPipe.castShadow=false;
+// utility company valve (registro da concessionária) on the main
+const valve=new THREE.Group();valve.position.set(-5.9,-1.1,1.95);scene.add(valve);
+mesh(new THREE.CylinderGeometry(.42,.42,.5,18),M("#475569"),0,0,0,valve).rotation.z=Math.PI/2;
+mesh(new THREE.CylinderGeometry(.06,.06,1.1,8),M("#94a3b8"),0,.75,0,valve);
+const wheel=new THREE.Group();wheel.position.y=1.32;valve.add(wheel);
+mesh(new THREE.TorusGeometry(.32,.05,8,24),M("#dc2626"),0,0,0,wheel).rotation.x=Math.PI/2;
+mesh(new THREE.BoxGeometry(.64,.05,.05),M("#dc2626"),0,0,0,wheel);mesh(new THREE.BoxGeometry(.05,.05,.64),M("#dc2626"),0,0,0,wheel);
+// street pressure gauge
+const dialTex=(()=>{const c=document.createElement("canvas");c.width=c.height=256;const x=c.getContext("2d");x.fillStyle="#fff";x.beginPath();x.arc(128,128,124,0,7);x.fill();
+  const arc=(a0,a1,col)=>{x.strokeStyle=col;x.lineWidth=22;x.beginPath();x.arc(128,128,96,a0,a1);x.stroke();};
+  arc(Math.PI*.75,Math.PI*1.25,"#ef4444");arc(Math.PI*1.25,Math.PI*1.75,"#f59e0b");arc(Math.PI*1.75,Math.PI*2.25,"#22c55e");
+  x.fillStyle="#111";x.font="bold 30px Inter";x.textAlign="center";x.fillText("bar",128,190);return new THREE.CanvasTexture(c);})();
+function gaugeFace(par,r,y,z){mesh(new THREE.CircleGeometry(r,32),new THREE.MeshBasicMaterial({map:dialTex}),0,y,z,par);const n=new THREE.Group();n.position.set(0,y,z+.015);par.add(n);
+  mesh(new THREE.BoxGeometry(r*.1,r*.8,.01),M("#111"),0,r*.35,0,n);return n;}
+const gauge=new THREE.Group();gauge.position.set(-4.2,.75,1.95);scene.add(gauge);
+mesh(new THREE.CylinderGeometry(.06,.06,1.9,8),M("#8ea4b3"),0,-.95,0,gauge);
+mesh(new THREE.CylinderGeometry(.42,.42,.12,28),M("#2b2f36"),0,.2,0,gauge).rotation.x=Math.PI/2;
+const needle=gaugeFace(gauge,.38,.2,.07);
+
+/* ---------- water particles ---------- */
+const N=300;
+const drops=new THREE.InstancedMesh(new THREE.SphereGeometry(.11,8,6),M("#1f8ff0",{emissive:"#0b4f8f",roughness:.2}),N);drops.castShadow=false;scene.add(drops);
+const dummy=new THREE.Object3D();
+
+/* ---------- the pump ---------- */
+const pump=new THREE.Group();pump.position.set(PUMP_X,.5,1.95);scene.add(pump);
+const pumpBody=new THREE.Group();pump.add(pumpBody);
+const teal=M("#13a89e",{roughness:.45,emissive:"#000"}),dark=M("#1f2933",{roughness:.6});
+mesh(new THREE.BoxGeometry(1.5,.12,.9),dark,0,-.46,0,pumpBody);
+const motor=mesh(new THREE.CylinderGeometry(.42,.42,.95,24),teal,.25,0,0,pumpBody);motor.rotation.z=Math.PI/2;
+for(let i=0;i<8;i++){const f=mesh(new THREE.BoxGeometry(.9,.04,.06),teal,.3,0,0,pumpBody);f.position.y=Math.sin(i/8*Math.PI*2)*.44;f.position.z=Math.cos(i/8*Math.PI*2)*.44;}
+const head=mesh(new THREE.CylinderGeometry(.5,.5,.38,24),teal,-.42,0,0,pumpBody);head.rotation.z=Math.PI/2;
+const fan=new THREE.Group();fan.position.set(-.62,0,0);pumpBody.add(fan);
+mesh(new THREE.CylinderGeometry(.08,.08,.06,10),M("#ddd"),0,0,0,fan).rotation.z=Math.PI/2;
+for(let i=0;i<6;i++){const b=mesh(new THREE.BoxGeometry(.03,.36,.08),M("#e5e7eb",{metalness:.5,roughness:.3}),-.02,0,0,fan);b.rotation.x=i/6*Math.PI*2;b.position.y=Math.cos(i/6*Math.PI*2)*.18;b.position.z=Math.sin(i/6*Math.PI*2)*.18;}
+mesh(new THREE.CylinderGeometry(.5,.5,.03,24),M("#bfe9ff",{transparent:true,opacity:.25,depthWrite:false}),-.63,0,0,pumpBody).rotation.z=Math.PI/2;
+const pumpLed=mesh(new THREE.SphereGeometry(.06,10,8),M("#444"),.6,.3,.45,pumpBody);
+// internal controller panel (display) on the motor
+const panel=new THREE.Group();panel.position.set(.25,.15,.45);pumpBody.add(panel);
+mesh(new THREE.BoxGeometry(.5,.32,.06),M("#111827"),0,0,0,panel);
+const panelScreen=mesh(new THREE.BoxGeometry(.3,.1,.02),M("#22c55e",{emissive:"#22c55e"}),0,.03,.04,panel);
+// pressostato gauge on top (with a live needle)
+const presso=new THREE.Group();presso.position.set(-.42,.55,0);pump.add(presso);
+mesh(new THREE.CylinderGeometry(.05,.05,.3,8),M("#b0b7bf",{metalness:.6}),0,-.05,0,presso);
+mesh(new THREE.CylinderGeometry(.2,.2,.1,24),M("#e11d48"),0,.22,0,presso).rotation.x=Math.PI/2;
+const pNeedle=gaugeFace(presso,.16,.22,.06);
+// fluxostato on the inlet pipe
+const fluxo=new THREE.Group();fluxo.position.set(PUMP_X-1.15,.5,1.95);scene.add(fluxo);
+mesh(new THREE.BoxGeometry(.42,.36,.42),M("#f59e0b"),0,.22,0,fluxo);
+const fluxLed=mesh(new THREE.SphereGeometry(.05,10,8),M("#22c55e",{emissive:"#22c55e"}),.1,.3,.22,fluxo);
+const fluxArrow=mesh(new THREE.ConeGeometry(.07,.16,8),M("#0f172a"),-.08,.25,.22,fluxo);fluxArrow.rotation.z=-Math.PI/2;
+// external controller box
+const ctrl=new THREE.Group();ctrl.position.set(.55,1.05,1.95);scene.add(ctrl);
+mesh(new THREE.BoxGeometry(.55,.62,.36),M("#1f2937"),0,0,0,ctrl);
+mesh(new THREE.BoxGeometry(.4,.2,.02),M("#0ea5e9",{emissive:"#075985"}),0,.12,.19,ctrl);
+mesh(new THREE.CylinderGeometry(.08,.08,.5,8),M("#8ea4b3"),0,-.5,0,ctrl);
+// scanning ring + shield
+const ring=mesh(new THREE.TorusGeometry(.38,.03,8,40),new THREE.MeshBasicMaterial({color:"#38bdf8",transparent:true}),-1.3,.5,1.95);ring.rotation.y=Math.PI/2;ring.castShadow=false;
+const shieldTex=(()=>{const c=document.createElement("canvas");c.width=c.height=256;const x=c.getContext("2d");x.fillStyle="#16a34a";x.beginPath();x.moveTo(128,16);x.lineTo(228,56);x.quadraticCurveTo(228,190,128,242);x.quadraticCurveTo(28,190,28,56);x.closePath();x.fill();
+  x.strokeStyle="#fff";x.lineWidth=22;x.lineCap="round";x.lineJoin="round";x.beginPath();x.moveTo(80,130);x.lineTo(115,165);x.lineTo(180,95);x.stroke();return new THREE.CanvasTexture(c);})();
+const shield=new THREE.Sprite(new THREE.SpriteMaterial({map:shieldTex,transparent:true,depthTest:false}));shield.renderOrder=11;shield.position.set(PUMP_X+.15,1.25,2.4);scene.add(shield);
+
+/* ---------- ordinary pump (neighbour) that burns when dry ---------- */
+const bad=new THREE.Group();bad.position.set(-7.2,.47,.9);bad.rotation.y=.25;scene.add(bad);
+const badM=M("#6b7280",{roughness:.5,emissive:"#000"});
+mesh(new THREE.BoxGeometry(1.2,.1,.7),dark,0,-.36,0,bad);
+mesh(new THREE.CylinderGeometry(.33,.33,.8,20),badM,.15,0,0,bad).rotation.z=Math.PI/2;
+mesh(new THREE.CylinderGeometry(.4,.4,.3,20),badM,-.4,0,0,bad).rotation.z=Math.PI/2;
+const smoke=[];for(let i=0;i<30;i++)smoke.push(mesh(new THREE.SphereGeometry(.18,8,6),M("#555",{transparent:true,opacity:.6,depthWrite:false}),0,0,0,bad));
+const sparks=[];for(let i=0;i<16;i++)sparks.push(mesh(new THREE.SphereGeometry(.035,6,4),new THREE.MeshBasicMaterial({color:"#ffd34d"}),0,0,0,bad));
+
+/* ---------- characters ---------- */
+function person({skin="#e0ac69",shirt="#3a86ff",pants="#264653",hair="#2b1b10",towel=false,cap=null,s=1}){
+  const root=new THREE.Group(),body=new THREE.Group();root.add(body);
+  const Sk=M(skin),Sh=M(towel?skin:shirt),Pa=M(towel?"#7dd3fc":pants),Ha=M(hair);
+  const leg=x=>{const g=new THREE.Group();g.position.set(x,.9,0);mesh(new THREE.BoxGeometry(.26,.9,.28),towel?Sk:Pa,0,-.45,0,g);mesh(new THREE.BoxGeometry(.28,.12,.38),M("#333"),0,-.86,.05,g);body.add(g);return g;};
+  const legL=leg(-.16),legR=leg(.16);
+  mesh(new THREE.BoxGeometry(.72,.9,.42),Sh,0,1.35,0,body);
+  if(towel)mesh(new THREE.BoxGeometry(.78,.5,.48),Pa,0,.85,0,body);
+  const head=new THREE.Group();head.position.y=1.82;body.add(head);
+  mesh(new THREE.SphereGeometry(.32,16,12),Sk,0,.28,0,head);
+  if(cap){mesh(new THREE.SphereGeometry(.34,16,10,0,Math.PI*2,0,Math.PI/2),M(cap),0,.33,0,head);mesh(new THREE.BoxGeometry(.4,.04,.3),M(cap),0,.36,.3,head);}
+  else mesh(new THREE.SphereGeometry(.335,16,10,0,Math.PI*2,0,Math.PI/2.2),Ha,0,.32,-.02,head);
+  const eyeM=M("#111");mesh(new THREE.SphereGeometry(.045,8,6),eyeM,-.11,.33,.29,head);mesh(new THREE.SphereGeometry(.045,8,6),eyeM,.11,.33,.29,head);
+  const mouth=mesh(new THREE.TorusGeometry(.085,.02,6,12,Math.PI),M("#7a2a2a"),0,.18,.3,head);
+  const arm=x=>{const g=new THREE.Group();g.position.set(x,1.72,0);mesh(new THREE.BoxGeometry(.2,.75,.22),Sh,0,-.36,0,g);mesh(new THREE.SphereGeometry(.11,8,6),Sk,0,-.78,0,g);body.add(g);return g;};
+  const armL=arm(-.47),armR=arm(.47);root.scale.setScalar(s);scene.add(root);
+  return {root,body,head,mouth,legL,legR,armL,armR};
+}
+function pose(p,{la=[0,0],ra=[0,0],ll=0,lr=0,ht=0,hy=0,smile=true}){p.armL.rotation.set(la[0],0,la[1]);p.armR.rotation.set(ra[0],0,ra[1]);p.legL.rotation.x=ll;p.legR.rotation.x=lr;p.head.rotation.set(ht,hy,0);p.mouth.rotation.z=smile?Math.PI:0;p.mouth.position.y=smile?.2:.14;}
+const morador=person({skin:"#d9a066",hair:"#2b1b10",towel:true,s:.82});morador.root.position.set(2.65,FH+.12,-1.0);
+const moradora=person({skin:"#8d5524",shirt:"#ec4899",pants:"#1f2937",hair:"#1b1110",s:.8});moradora.root.position.set(4.9,2*FH+.12,-.2);
+const tecnico=person({skin:"#a86b3c",shirt:"#f59e0b",pants:"#1e3a5f",cap:"#1e3a5f",s:.85});
+const vizinho=person({skin:"#f1c27d",shirt:"#8b5cf6",pants:"#374151",hair:"#6b4423",s:.85});vizinho.root.position.set(-8.3,.12,.7);vizinho.root.rotation.y=.5;
+
+/* ---------- labels ---------- */
+function rr(x,X,Y,w,h,r){x.beginPath();x.moveTo(X+r,Y);x.arcTo(X+w,Y,X+w,Y+h,r);x.arcTo(X+w,Y+h,X,Y+h,r);x.arcTo(X,Y+h,X,Y,r);x.arcTo(X,Y,X+w,Y,r);x.closePath();}
+function label(text,{bg="#ffffff",fg="#0f172a",icon=""}={}){
+  const c=document.createElement("canvas"),x=c.getContext("2d");x.font="800 46px Inter";
+  const tw=x.measureText(text).width+(icon?64:0);c.width=Math.ceil(tw+56);c.height=88;
+  x.fillStyle="rgba(0,0,0,.25)";rr(x,4,8,c.width-8,c.height-12,24);x.fill();
+  x.fillStyle=bg;rr(x,2,2,c.width-8,c.height-12,24);x.fill();
+  let X=26;if(icon){x.fillStyle=fg;x.beginPath();x.arc(X+22,40,24,0,7);x.fill();x.fillStyle=bg;x.font="900 34px Inter";x.textAlign="center";x.fillText(icon,X+22,52);x.textAlign="left";X+=64;}
+  x.font="800 46px Inter";x.fillStyle=fg;x.fillText(text,X,58);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthTest:false}));
+  s.renderOrder=10;s.userData.aspect=c.width/c.height;scene.add(s);return s;
+}
+const OK={bg:"#16a34a",fg:"#fff"},BAD={bg:"#dc2626",fg:"#fff"},INFO={bg:"#fff",fg:"#0f172a"},BLUE={bg:"#0369a1",fg:"#fff"},AMB={bg:"#f59e0b",fg:"#1f2937"},ROSE={bg:"#e11d48",fg:"#fff"};
+const PX=PUMP_X,PZ=1.95;
+const LABELS=[
+  ["Cadê a água?!",INFO,"?",[3.2,FH+2.35,0],.6,2.0,.3],
+  ["Água fraca da rua",BAD,"!",[-4.2,1.75,2.2],2.2,3.9,.28],
+  ["A água não sobe",BAD,"✕",[1.3,4.2,2.4],4.2,5.9,.8],
+  ["1º andar",{bg:"#facc15",fg:"#1f2937"},"",[5.4,1.8,1.9],6.0,8.4,.55],
+  ["2º andar",{bg:"#facc15",fg:"#1f2937"},"",[5.4,FH+1.8,1.9],6.6,8.4,.55],
+  ["3º andar",{bg:"#facc15",fg:"#1f2937"},"",[5.4,2*FH+1.8,1.9],7.2,8.4,.55],
+  ["Bomba",INFO,"",[PX,1.32,PZ+.3],10.9,12.5,.13],
+  ["Controlador automático",BLUE,"",[PX+.2,1.32,PZ+.3],13.0,14.5,.12],
+  ["Interno",OK,"",[PX+.25,.95,PZ+.7],14.6,15.7,.1],
+  ["Externo",OK,"",[.55,1.65,PZ+.3],15.7,16.5,.11],
+  ["Pressostato",ROSE,"",[PX-.42,1.5,PZ+.3],16.6,19.0,.1],
+  ["Lendo o fluxo da rede…",INFO,"",[-1.6,1.9,2.3],19.1,23.4,.36],
+  ["Fluxo chegando",OK,"✓",[PX,1.3,PZ+.4],23.6,25.0,.12],
+  ["Bomba liga",OK,"▶",[PX,1.3,PZ+.4],25.0,26.5,.12],
+  ["A água chega lá em cima",OK,"✓",[2.2,TOP+2.9,0],27.0,28.4,.7],
+  ["Água cortada",BAD,"✕",[-5.9,1.0,2.3],31.0,32.4,.24],
+  ["Sem fluxo: desliga",BAD,"■",[PX,1.32,PZ+.4],33.2,35.0,.12],
+  ["Protegida contra trabalho a seco",OK,"",[PX,1.72,PZ+.4],35.1,36.4,.1],
+  ["Bomba comum queima",BAD,"✕",[-7.4,1.75,1.2],36.6,38.0,.22],
+  ["Fluxostato",AMB,"",[PX-1.15,1.05,PZ+.3],38.1,40.0,.1],
+  ["Boia fechou",{bg:"#ea580c",fg:"#fff"},"",[2.4,TOP+2.4,.6],41.5,42.5,.24],
+  ["Pressão atingida",OK,"✓",[PX-.42,1.5,PZ+.3],43.8,45.0,.1],
+  ["Bombeamento encerrado",INFO,"■",[PX,1.32,PZ+.4],45.1,48.0,.11],
+  ["Pressurizador da sua rede",OK,"✓",[1.6,TOP+3.0,0],48.8,52.2,.75],
+].map(([t,st,ic,p,a,b,sc])=>{const s=label(t,{...st,icon:ic});s.position.set(...p);return {s,a,b,sc};});
+
+/* ---------- camera shots ---------- */
+const CLOSE=(x=PX+.15,y=.62,d=3.5,dx=0,dy=.45)=>[[x+dx,y+dy,PZ+d],[x,y,PZ]];
+const SHOTS=[
+ [0,[3.0,FH+1.8,7.8],[2.9,FH+1.3,-.6]],
+ [1.9,[3.0,FH+1.8,7.6],[2.9,FH+1.3,-.6]],
+ [2.6,[-4.0,1.3,8.8],[-4.0,-.1,1.9]],
+ [3.8,[-3.6,1.3,8.8],[-3.6,-.1,1.9]],
+ [4.6,[.6,6.4,28],[.8,6.0,0]],
+ [5.8,[.6,6.4,28],[.8,6.0,0]],
+ [6.5,[4.2,6.0,21],[4.2,5.6,0]],
+ [8.3,[4.2,6.0,21],[4.2,5.6,0]],
+ [9.2,[-.8,2.6,14],[-.8,1.0,1.4]],
+ [10.2,[-.8,2.6,14],[-.8,1.0,1.4]],
+ [10.9,...CLOSE(PX+.15,.62,3.4,.9)],      // close: a bomba aparece
+ [12.6,...CLOSE(PX+.15,.62,3.4,-.6)],
+ [13.2,...CLOSE(PX+.35,.7,3.7,.2)],      // close: controlador interno/externo
+ [16.2,...CLOSE(PX+.45,.75,3.9,-.2)],
+ [16.9,...CLOSE(PX-.35,.95,2.9,.1,.25)],   // close no pressostato
+ [18.8,...CLOSE(PX-.35,.95,2.8,-.1,.25)],
+ [19.6,[-1.7,1.9,12.5],[-1.7,.3,1.9]],
+ [23.2,[-1.7,1.9,12.2],[-1.7,.3,1.9]],
+ [23.8,...CLOSE(PX+.1,.62,3.3,.5)],       // close: fluxo chegando / liga
+ [25.9,...CLOSE(PX+.1,.62,3.3,-.4)],
+ [27.0,[1.0,7.6,27],[1.2,7.4,0]],
+ [28.3,[1.0,7.6,27],[1.2,7.4,0]],
+ [29.0,[-5.2,1.2,8.6],[-5.2,-.2,1.9]],
+ [32.2,[-5.0,1.2,8.6],[-5.0,-.2,1.9]],
+ [32.8,...CLOSE(PX+.15,.62,3.3,.6)],      // close: desliga sem fluxo
+ [36.2,...CLOSE(PX+.15,.62,3.4,-.5)],
+ [36.8,[-7.2,1.6,6.6],[-7.5,.6,1]],
+ [37.8,[-7.0,1.6,6.4],[-7.5,.6,1]],
+ [38.4,...CLOSE(PX-.75,.65,3.2,.3)],      // close: fluxostato
+ [39.8,...CLOSE(PX-.75,.65,3.2,-.3)],
+ [40.6,[2.4,TOP+2.0,6.6],[2.4,TOP+1.0,0]],
+ [42.3,[2.4,TOP+2.0,6.4],[2.4,TOP+1.0,0]],
+ [42.9,...CLOSE(PX-.3,.85,2.8,.2,.3)],    // close: pressão atingida
+ [44.8,...CLOSE(PX-.3,.85,2.7,-.2,.3)],
+ [45.4,...CLOSE(PX+.15,.62,3.4,.4)],      // close: encerra o bombeamento
+ [47.9,...CLOSE(PX+.15,.62,3.5,-.4)],
+ [49.0,[2.2,7.2,28],[1.4,6.8,0]],
+ [53,[-.4,7.4,27],[1.2,6.8,0]]];
+const CLOSEUPS=[[10.6,12.7],[13.0,18.9],[23.6,26.1],[32.6,36.4],[38.2,40.0],[42.7,48.0]];
+function camAt(t){let i=0;while(i<SHOTS.length-2&&t>SHOTS[i+1][0])i++;const a=SHOTS[i],b=SHOTS[i+1];const k=sm((t-a[0])/(b[0]-a[0]));
+  const lp=(u,v)=>u.map((x,j)=>x+(v[j]-x)*k);return [lp(a[1],b[1]),lp(a[2],b[2])];}
+const closeAmt=t=>CLOSEUPS.reduce((m,[a,b])=>Math.max(m,win(t,a,b,.5)),0);
+
+/* ---------- story state ---------- */
+function mainWater(t){return 1-ramp(t,31.0,32.4)*(1-ramp(t,38.0,38.6));}
+function pumpOn(t){return ramp(t,25.0,25.6)*(1-ramp(t,34.0,34.6))+ramp(t,38.8,39.4)*(1-ramp(t,45.0,45.6));}
+function flowSpeed(t){if(t>=42.0&&t<52)return 0;const on=pumpOn(t);return 1.3+3.9*on;}
+const DT=1/120,TMAX=60;const flowPhase=[0],fanAng=[0];
+for(let i=1;i<=TMAX/DT;i++){const t=i*DT;flowPhase.push(flowPhase[i-1]+flowSpeed(t)*DT);fanAng.push(fanAng[i-1]+pumpOn(t)*28*DT);}
+const look=(arr,t)=>arr[Math.min(arr.length-1,Math.round(t/DT))];
+function reach(t){const weak=lens[3]+1.4+.5*Math.sin(t*1.7);return weak+(L-weak)*ramp(t,25.2,27.6);}
+function drainTail(t){return t<31.2?0:(t<38?L*1.1*ramp(t,31.2,33.0):0);}
+function refillFront(t){return t<38?L*1.2:L*1.2*ramp(t,38.0,39.6);}
+function tankLevel(t){return .12+.38*ramp(t,27.0,31.0)+.42*ramp(t,39.2,41.4);}
+function pressure(t){ // pressostato reading on the pump
+  let p=.2; p+= .3*pumpOn(t); if(t>31.5&&t<38.4)p=.2*(1-ramp(t,31.5,33))+.0; if(t>=42.4)p=.5+.42*ramp(t,42.6,44.6); return clamp(p);}
+
+function drawFrame(t){
+  const [cp,ct]=camAt(t);camera.position.set(...cp);camera.lookAt(...ct);
+  const ph=look(flowPhase,t),R=reach(t),dT=drainTail(t),rF=refillFront(t);
+  for(let i=0;i<N;i++){
+    const s=((i/N)*L+ph)%L; let sc=(s<=R&&s>=dT&&s<=rF)?1:0;
+    if(sc&&R-s<1.2&&t<27.6)sc*=clamp((R-s)/1.2,.25,1);
+    dummy.position.copy(path.getPointAt(clamp(s/L,0,1)));dummy.scale.setScalar(sc*(.85+.3*((i*7)%5)/5));dummy.updateMatrix();drops.setMatrixAt(i,dummy.matrix);
+  }
+  drops.instanceMatrix.needsUpdate=true;
+  needle.rotation.z=Math.PI*.75-(.22+.04*Math.sin(t*3))*mainWater(t)*Math.PI*1.5;
+  wheel.rotation.y=-ramp(t,30.6,31.6)*Math.PI*2+ramp(t,37.6,38.4)*Math.PI*2;
+  // tank, float, valve
+  const lv=tankLevel(t);tankWater.scale.y=lv*TH*.95;tankWater.position.y=lv*TH*.95/2+.04;
+  floatArm.rotation.z=-.55+.62*ramp(lv,.6,.92);
+  const closed=t>41.5;valveLed.material.color.set(closed?"#ef4444":"#22c55e");valveLed.material.emissive.set(closed?"#ef4444":"#22c55e");
+  // floors highlight
+  floorHL.forEach((m,f)=>{m.material.opacity=.28*win(t,6.0+f*.6,8.4,.3)*(.75+.25*Math.sin(t*6));});
+  // shower (2nd floor) + tap (3rd floor)
+  const fl=t<27?.12:1;
+  showerDrops.forEach((d,i)=>{const u=((t*1.6+i/showerDrops.length)%1);d.visible=(i/showerDrops.length)<fl+.03;
+    d.position.set(2.6+Math.sin(i*2.4)*.3*u*fl,FH+2.5-u*2.2,-.95+Math.cos(i*1.7)*.3*u*fl);});
+  const tapOn=t>27.6;
+  tapDrops.forEach((d,i)=>{const u=((t*2+i/tapDrops.length)%1);d.visible=tapOn;d.position.set(4.2,2*FH+1.2-u*.25,-1.25);});
+  // pump
+  const pIn=ramp(t,10.7,11.6);pump.scale.setScalar(Math.max(.001,pIn));pump.position.y=.5+(1-pIn)*.6;
+  const run=pumpOn(t);pumpBody.position.set(Math.sin(t*90)*.012*run,Math.cos(t*77)*.01*run,0);
+  fan.rotation.x=look(fanAng,t);
+  const dryRun=t>31.8&&t<34.2&&run>.5;
+  teal.emissive.setRGB(dryRun?.25+.15*Math.sin(t*14):0,0,0);
+  const ledC=run>.5?(dryRun?"#f59e0b":"#22c55e"):(t>25?"#ef4444":"#555");
+  pumpLed.material.color.set(ledC);pumpLed.material.emissive.set(run>.5||t>25?ledC:"#000");
+  const pIntern=ramp(t,14.6,15.1);panel.scale.setScalar(Math.max(.001,pIntern));
+  panelScreen.material.emissive.set(run>.5?"#22c55e":(t>25?"#991b1b":"#166534"));
+  const pr=ramp(t,16.6,17.2);presso.scale.setScalar(Math.max(.001,pr));presso.position.y=.55+(1-pr)*.4;
+  pNeedle.rotation.z=Math.PI*.75-pressure(t)*Math.PI*1.5;
+  const fx=ramp(t,38.1,38.6);fluxo.scale.setScalar(Math.max(.001,fx));
+  const hasFlow=mainWater(t)>.5;fluxLed.material.emissive.set(hasFlow?(Math.sin(t*8)>0?"#22c55e":"#14532d"):"#ef4444");fluxLed.material.color.set(hasFlow?"#22c55e":"#ef4444");
+  const cIn=win(t,15.7,16.6,.3);ctrl.scale.setScalar(Math.max(.001,cIn));
+  // ring + shield
+  const scan=win(t,19.2,25.0,.4)+win(t,32.6,34.4,.3)+win(t,38.2,39.8,.3);
+  ring.visible=scan>.01;const ru=(t*1.2)%1;ring.scale.setScalar(.8+ru*.8);ring.material.opacity=Math.min(1,scan)*(1-ru);
+  ring.material.color.set(t>32.6&&t<38?"#ef4444":(t>23.5?"#22c55e":"#38bdf8"));
+  const sh=win(t,35.0,36.5,.3);shield.visible=sh>.01;shield.material.opacity=sh;shield.scale.setScalar(.38*(1+.1*Math.sin(t*6)));
+  // neighbour's ordinary pump
+  const bIn=win(t,36.3,38.2,.25);bad.visible=bIn>.01;vizinho.root.visible=bIn>.01;
+  const heat=ramp(t,36.4,37.6);badM.color.setRGB(.42+.5*heat,.45-.25*heat,.5-.35*heat);badM.emissive.setRGB(.5*heat,.08*heat,0);
+  smoke.forEach((m,i)=>{const age=(t-36.4)-i*.05;if(age<0){m.visible=false;return;}const u=(age%1.6)/1.6;m.visible=true;
+    m.position.set(-.3+Math.sin(i*3.1)*.25*u,.3+u*2.4,Math.cos(i*2.3)*.25*u);m.scale.setScalar(.6+u*2);m.material.opacity=.55*(1-u)*heat;});
+  sparks.forEach((m,i)=>{const u=((t*2.3+i/sparks.length)%1);m.visible=heat>.3;m.position.set(-.45+Math.sin(i*5)*u*.9,.2+u*.9-u*u*1.2,Math.cos(i*3)*u*.9);});
+  pose(vizinho,{la:[-2.6,.9+Math.sin(t*14)*.25],ra:[-2.6,-.9-Math.sin(t*14)*.25],hy:Math.sin(t*8)*.3,smile:false});
+  // resident (2nd floor) + resident (3rd floor)
+  if(t<27){pose(morador,{la:[-.5,.5],ra:[-.5,-.5],ht:.35,hy:win(t,.4,2.2,.3)*Math.sin(t*7)*.35,smile:false});morador.root.position.y=FH+.12;}
+  else{const hap=win(t,27,29.5,.2)+win(t,48.8,53,.3);morador.root.position.y=FH+.12+Math.abs(Math.sin(t*6.5))*.28*Math.min(1,hap);const w=Math.sin(t*10)*.35;
+    pose(morador,hap>.1?{la:[0,2.6+w],ra:[0,-2.6-w],ht:-.15}:{la:[0,.1],ra:[0,-.1]});}
+  { const happy=t>27.6, wave=win(t,48.8,53,.3);
+    pose(moradora,happy?{la:[-.6,.2],ra:[wave>.1?-2.8:-.6,wave>.1?-.3+Math.sin(t*10)*.4:-.2],smile:true}:{la:[0,.6],ra:[0,-.6],ht:.25,hy:win(t,7,8.4)*Math.sin(t*5)*.3,smile:false});}
+  // technician
+  const walk=ramp(t,8.6,10.2);tecnico.root.visible=t>8.5&&closeAmt(t)<.25;tecnico.root.position.set(-4.6+2.55*walk,.13,1.25);
+  const stepping=t>8.5&&t<10.2,sw=stepping?Math.sin(t*12)*.6:0;tecnico.root.rotation.y=stepping?Math.PI/2:.55;
+  let la=[sw,0],ra=[-sw,0];if(t>=19.2&&t<23.4)ra=[-1.4,-.4];if(t>=48.8)ra=[-2.9,-.2];
+  pose(tecnico,{la,ra,ll:sw,lr:-sw});
+  // labels
+  LABELS.forEach(({s,a,b,sc})=>{const o=win(t,a,b,.3);s.visible=o>.01;s.material.opacity=o;const pop=1+.12*(1-ramp(t,a,a+.3));s.scale.set(sc*s.userData.aspect*pop,sc*pop,1);});
+  renderer.render(scene,camera);
+  // composite + soft spotlight vignette during pump close-ups
+  ctx.drawImage(renderer.domElement,0,0);
+  const v=closeAmt(t);
+  if(v>.01){const g=ctx.createRadialGradient(W/2,H*.5,W*.32,W/2,H*.5,H*.62);g.addColorStop(0,"rgba(8,12,20,0)");g.addColorStop(1,"rgba(8,12,20,"+(.6*v)+")");ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+}
+window.renderAt=t=>{drawFrame(t);return out.toDataURL("image/jpeg",.9);};
+window.ready=true;
+</script></body></html>
