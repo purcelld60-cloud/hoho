@@ -328,8 +328,10 @@ function drawFrame(t){
 
 /* ---------- 2D overlay: section header + captions ---------- */
 function wrap(text,maxW){const ws=text.split(" "),ls=[];let l="";ws.forEach(w=>{const tl=l?l+" "+w:w;if(ctx.measureText(tl).width>maxW&&l){ls.push(l);l=w;}else l=tl;});ls.push(l);return ls;}
+const SHOW_TEXT=false; // legendas e título de seção desligados
 function composite(t){
   ctx.drawImage(renderer.domElement,0,0);
+  if(!SHOW_TEXT)return;
   const sec=SECTIONS.find(s=>t>=s[0]&&t<s[1]);
   if(sec){const o=win(t,sec[0],sec[1],.35);ctx.globalAlpha=o;
     ctx.font="800 26px Inter";const k=sec[2].toUpperCase();const kw=ctx.measureText(k).width;
